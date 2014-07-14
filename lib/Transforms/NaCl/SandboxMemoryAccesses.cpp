@@ -96,6 +96,11 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
         sandboxOperand(I, 0);
       else if (isa<StoreInst>(I))
         sandboxOperand(I, 1);
+      else if (isa<MemCpyInst>(I) || isa<MemMoveInst>(I)) {
+        sandboxOperand(I, 0);
+        sandboxOperand(I, 1);
+      } else if (isa<MemSetInst>(I))
+        sandboxOperand(I, 0);
     }
   }
   return true;
