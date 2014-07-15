@@ -7,7 +7,19 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// XXX
+// This pass applies SFI sandboxing to all memory access instructions
+// in the IR. Pointers are truncated to 32-bit integers and shifted to
+// the 32-bit address subspace defined by base address stored in
+// a global variable initialized at runtime.
+//
+// Currently only works on x86_64.
+//
+// Applied on instructions:
+//  - load, store
+//  - memcpy, memmove, memset
+//
+// Recognizes pointer arithmetic produced by ExpandGetElementPtr and
+// reuses its final integer value to save two casts.
 //
 //===----------------------------------------------------------------------===//
 
@@ -21,11 +33,6 @@
 #define GLOBAL_MINSFI_MEMBASE "__sfi_memory_base"
 
 using namespace llvm;
-
-/* Things to consider:
- * - different MemBaseVar linkage (what Mark said about static/shared linking)
- * - pass MemBase around as an argument (benchmark)
- */
 
 namespace {
 
