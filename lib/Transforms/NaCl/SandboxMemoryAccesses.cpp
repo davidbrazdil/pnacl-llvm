@@ -115,15 +115,16 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
 
   for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
     for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I) {
-      if (isa<LoadInst>(I))
-        MemBase = sandboxOperand(I, 0, F, MemBase);
-      else if (isa<StoreInst>(I))
-        MemBase = sandboxOperand(I, 1, F, MemBase);
-      else if (isa<MemCpyInst>(I) || isa<MemMoveInst>(I)) {
-        MemBase = sandboxOperand(I, 0, F, MemBase);
-        MemBase = sandboxOperand(I, 1, F, MemBase);
-      } else if (isa<MemSetInst>(I))
-        MemBase = sandboxOperand(I, 0, F, MemBase);
+      if (isa<LoadInst>(I)) {
+        sandboxOperand(I, 0, F, &MemBase);
+      } else if (isa<StoreInst>(I)) {
+        sandboxOperand(I, 1, F, &MemBase);
+      } else if (isa<MemCpyInst>(I) || isa<MemMoveInst>(I)) {
+        sandboxOperand(I, 0, F, &MemBase);
+        sandboxOperand(I, 1, F, &MemBase);
+      } else if (isa<MemSetInst>(I)) {
+        sandboxOperand(I, 0, F, &MemBase);
+      }
     }
   }
   return true;
