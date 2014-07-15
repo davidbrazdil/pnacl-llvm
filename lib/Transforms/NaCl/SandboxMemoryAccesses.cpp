@@ -32,6 +32,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/NaClAtomicIntrinsics.h"
 
 static const std::string GlobalMemBaseVariableName = "__sfi_memory_base";
 
@@ -138,6 +139,19 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
       } else if (isa<MemSetInst>(I)) {
         sandboxPtrOperand(I, 0, F, &MemBase);
         sandboxLenOperand(I, 2, F);
+      } else if (IntrinsicInst *IntrCall = dyn_cast<IntrinsicInst>(I)) {
+        switch (IntrCall->getIntrinsicID()) {
+          case Intrinsic::nacl_atomic_load:
+          case Intrinsic::nacl_atomic_cmpxchg:
+            sandboxPtrOperand(IntrCall, 0, F, &MemBase);
+            break;
+          case Intrinsic::nacl_atomic_store:
+          case Intrinsic::nacl_atomic_rmw:
+            sandboxPtrOperand(IntrCall, 1, F, &MemBase);
+            break;
+          default:
+            report_fatal_error("Encountered an unknown intrinsic");
+        }
       }
     }
   }

@@ -12,6 +12,11 @@ declare void @llvm.memmove.p0i8.p0i8.i64(i8* nocapture, i8* nocapture readonly, 
 declare void @llvm.memset.p0i8.i32(i8* nocapture, i8, i32, i32, i1)
 declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1)
 
+declare i32 @llvm.nacl.atomic.load.i32(i32*, i32)
+declare void @llvm.nacl.atomic.store.i32(i32, i32*, i32)
+declare i32 @llvm.nacl.atomic.rmw.i32(i32, i32*, i32, i32)
+declare i32 @llvm.nacl.atomic.cmpxchg.i32(i32*, i32, i32, i32, i32)
+
 define i32 @test_load(i32* %ptr) {
   %val = load i32* %ptr
   ret i32 %val
@@ -170,5 +175,65 @@ define i32 @test_load_elementptr(%struct.foo* %foo) {
 ; CHECK-NEXT:   %2 = add i64 %mem_base, %1
 ; CHECK-NEXT:   %3 = inttoptr i64 %2 to i32*
 ; CHECK-NEXT:   %val = load i32* %3
+; CHECK-NEXT:   ret i32 %val
+; CHECK-NEXT: }
+
+define i32 @test_atomic_load(i32* %ptr) {
+  %val = call i32 @llvm.nacl.atomic.load.i32(i32* %ptr, i32 1)
+  ret i32 %val
+}
+
+; CHECK:      define i32 @test_atomic_load(i32* %ptr) {
+; CHECK-NEXT:   %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:   %1 = ptrtoint i32* %ptr to i32
+; CHECK-NEXT:   %2 = zext i32 %1 to i64
+; CHECK-NEXT:   %3 = add i64 %mem_base, %2
+; CHECK-NEXT:   %4 = inttoptr i64 %3 to i32* 
+; CHECK-NEXT:   %val = call i32 @llvm.nacl.atomic.load.i32(i32* %4, i32 1)
+; CHECK-NEXT:   ret i32 %val
+; CHECK-NEXT: }
+
+define void @test_atomic_store(i32* %ptr) {
+  call void @llvm.nacl.atomic.store.i32(i32 1234, i32* %ptr, i32 1)
+  ret void
+}
+
+; CHECK:      define void @test_atomic_store(i32* %ptr) {
+; CHECK-NEXT:   %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:   %1 = ptrtoint i32* %ptr to i32
+; CHECK-NEXT:   %2 = zext i32 %1 to i64
+; CHECK-NEXT:   %3 = add i64 %mem_base, %2
+; CHECK-NEXT:   %4 = inttoptr i64 %3 to i32* 
+; CHECK-NEXT:   call void @llvm.nacl.atomic.store.i32(i32 1234, i32* %4, i32 1)
+; CHECK-NEXT:   ret void
+; CHECK-NEXT: }
+
+define i32 @test_atomic_rmw(i32* %ptr) {
+  %val = call i32 @llvm.nacl.atomic.rmw.i32(i32 1234, i32* %ptr, i32 1, i32 1)
+  ret i32 %val
+}
+
+; CHECK:      define i32 @test_atomic_rmw(i32* %ptr) {
+; CHECK-NEXT:   %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:   %1 = ptrtoint i32* %ptr to i32
+; CHECK-NEXT:   %2 = zext i32 %1 to i64
+; CHECK-NEXT:   %3 = add i64 %mem_base, %2
+; CHECK-NEXT:   %4 = inttoptr i64 %3 to i32* 
+; CHECK-NEXT:   %val = call i32 @llvm.nacl.atomic.rmw.i32(i32 1234, i32* %4, i32 1, i32 1)
+; CHECK-NEXT:   ret i32 %val
+; CHECK-NEXT: }
+
+define i32 @test_atomic_cmpxchg(i32* %ptr) {
+  %val = call i32 @llvm.nacl.atomic.cmpxchg.i32(i32* %ptr, i32 0, i32 1, i32 1, i32 1)
+  ret i32 %val
+}
+
+; CHECK:      define i32 @test_atomic_cmpxchg(i32* %ptr) {
+; CHECK-NEXT:   %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:   %1 = ptrtoint i32* %ptr to i32
+; CHECK-NEXT:   %2 = zext i32 %1 to i64
+; CHECK-NEXT:   %3 = add i64 %mem_base, %2
+; CHECK-NEXT:   %4 = inttoptr i64 %3 to i32*
+; CHECK-NEXT:   %val = call i32 @llvm.nacl.atomic.cmpxchg.i32(i32* %4, i32 0, i32 1, i32 1, i32 1)
 ; CHECK-NEXT:   ret i32 %val
 ; CHECK-NEXT: }
