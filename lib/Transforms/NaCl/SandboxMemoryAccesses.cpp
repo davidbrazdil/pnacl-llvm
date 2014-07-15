@@ -1,4 +1,4 @@
-//===- SandboxMemoryAccesses.cpp - XXX                                    -===//
+//===- SandboxMemoryAccesses.cpp - Apply SFI sandboxing to used pointers  -===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -28,68 +28,65 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Pass.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/Function.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Module.h"
 
-#define GLOBAL_MINSFI_MEMBASE "__sfi_memory_base"
+static const std::string GlobalMemBaseVariableName = "__sfi_memory_base";
 
 using namespace llvm;
 
 namespace {
 
-  class SandboxMemoryAccesses : public FunctionPass {
-    Value *MemBaseVar;
-    Type *I32;
-    Type *I64;
+class SandboxMemoryAccesses : public FunctionPass {
+  Value *MemBaseVar;
+  Type *I32;
+  Type *I64;
 
-    Value *sandboxOperand(Instruction *Inst, unsigned int OpNum, Function &Func,
-                          Value *MemBase);
+  void sandboxOperand(Instruction *Inst, unsigned int OpNum, Function &Func,
+                      Value **MemBase);
 
-  public:
-    static char ID;
-    SandboxMemoryAccesses() : FunctionPass(ID) {
-      initializeSandboxMemoryAccessesPass(*PassRegistry::getPassRegistry());
-    }
+public:
+  static char ID;
+  SandboxMemoryAccesses() : FunctionPass(ID) {
+    initializeSandboxMemoryAccessesPass(*PassRegistry::getPassRegistry());
+  }
 
-    virtual bool doInitialization(Module &M);
-    virtual bool runOnFunction(Function &F);
-  };
+  virtual bool doInitialization(Module &M);
+  virtual bool runOnFunction(Function &F);
+};
+
 }
 
 bool SandboxMemoryAccesses::doInitialization(Module &M) {
   I32 = Type::getInt32Ty(M.getContext());
   I64 = Type::getInt64Ty(M.getContext());
 
-  MemBaseVar = M.getOrInsertGlobal(GLOBAL_MINSFI_MEMBASE, I64);
+  MemBaseVar = M.getOrInsertGlobal(GlobalMemBaseVariableName, I64);
 
   return true;
 }
 
-Value *SandboxMemoryAccesses::sandboxOperand(Instruction *Inst,
-                                             unsigned int OpNum,
-                                             Function &Func,
-                                             Value *MemBase) {
-  /*
-   * Function must first acquire the sandbox memory region base from
-   * the global variable. If this is the first sandboxed pointer, insert
-   * the corresponding load instruction at the beginning of the function.
-   */
-  if (MemBase == NULL) {
+void SandboxMemoryAccesses::sandboxOperand(Instruction *Inst,
+                                           unsigned int OpNum,
+                                           Function &Func,
+                                           Value **MemBase) {
+
+  // Function must first acquire the sandbox memory region base from
+  // the global variable. If this is the first sandboxed pointer, insert
+  // the corresponding load instruction at the beginning of the function.
+  if (!(*MemBase)) {
     Instruction *MemBaseInst = new LoadInst(MemBaseVar, "mem_base");
     Func.getEntryBlock().getInstList().push_front(MemBaseInst);
-    MemBase = MemBaseInst;
+    *MemBase = MemBaseInst;
   }
 
   Value *Ptr = Inst->getOperand(OpNum);
 
-  /*
-   * Truncate the pointer to a 32-bit integer.
-   * If the preceding code does 32-bit arithmetic already, such as the pattern
-   * produced by ExpandGetElementPtr, reuse the final value and save two casts.
-   */
+  // Truncate the pointer to a 32-bit integer.
+  // If the preceding code does 32-bit arithmetic already, such as the pattern
+  // produced by ExpandGetElementPtr, reuse the final value and save two casts.
   Value *TruncatedPtr;
   IntToPtrInst *Cast = dyn_cast<IntToPtrInst>(Ptr);
   bool CastFromInt32 = Cast && Cast->getOperand(0)->getType()->isIntegerTy(32);
@@ -98,23 +95,19 @@ Value *SandboxMemoryAccesses::sandboxOperand(Instruction *Inst,
   else
     TruncatedPtr = new PtrToIntInst(Ptr, I32, "", Inst);
 
-  /* Extend the pointer value back to 64 bits and add the memory base. */
+  // Extend the pointer value back to 64 bits and add the memory base.
   Value *ExtendedPtr = new ZExtInst(TruncatedPtr, I64, "", Inst);
-  Value *AddedBase = BinaryOperator::Create(BinaryOperator::Add, MemBase,
-                                        ExtendedPtr, "", Inst);
+  Value *AddedBase = BinaryOperator::Create(BinaryOperator::Add, *MemBase,
+                                            ExtendedPtr, "", Inst);
   Value *SandboxedPtr = new IntToPtrInst(AddedBase, Ptr->getType(), "", Inst);
 
-  /* Replace the pointer in the sandboxed operand */
+  // Replace the pointer in the sandboxed operand
   Inst->setOperand(OpNum, SandboxedPtr);
 
-  /*
-   * If the sandboxing replaced an original IntToPtr instruction and it is
-   * not used any more, remove it.
-   */
+  // If the sandboxing replaced an original IntToPtr instruction and it is
+  // not used any more, remove it.
   if (CastFromInt32 && Cast->getNumUses() == 0)
     Cast->eraseFromParent();
-
-  return MemBase;
 }
 
 bool SandboxMemoryAccesses::runOnFunction(Function &F) {
