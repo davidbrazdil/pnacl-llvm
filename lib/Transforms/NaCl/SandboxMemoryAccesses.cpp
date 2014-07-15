@@ -21,6 +21,10 @@
 // Applied on instructions:
 //  - load, store
 //  - memcpy, memmove, memset
+//  - @llvm.nacl.atomic.load.*
+//  - @llvm.nacl.atomic.store.*
+//  - @llvm.nacl.atomic.rmw.*
+//  - @llvm.nacl.atomic.cmpxchg.*
 //
 // Recognizes pointer arithmetic produced by ExpandGetElementPtr and
 // reuses its final integer value to save two casts.
