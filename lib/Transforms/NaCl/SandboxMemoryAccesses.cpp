@@ -44,8 +44,9 @@ class SandboxMemoryAccesses : public FunctionPass {
   Type *I32;
   Type *I64;
 
-  void sandboxOperand(Instruction *Inst, unsigned int OpNum, Function &Func,
-                      Value **MemBase);
+  void sandboxPtrOperand(Instruction *Inst, unsigned int OpNum, Function &Func,
+                         Value **MemBase);
+  void sandboxLenOperand(Instruction *Inst, unsigned int OpNum, Function &Func);
 
 public:
   static char ID;
@@ -68,10 +69,10 @@ bool SandboxMemoryAccesses::doInitialization(Module &M) {
   return true;
 }
 
-void SandboxMemoryAccesses::sandboxOperand(Instruction *Inst,
-                                           unsigned int OpNum,
-                                           Function &Func,
-                                           Value **MemBase) {
+void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
+                                              unsigned int OpNum,
+                                              Function &Func,
+                                              Value **MemBase) {
 
   // Function must first acquire the sandbox memory region base from
   // the global variable. If this is the first sandboxed pointer, insert
@@ -110,23 +111,37 @@ void SandboxMemoryAccesses::sandboxOperand(Instruction *Inst,
     Cast->eraseFromParent();
 }
 
+void SandboxMemoryAccesses::sandboxLenOperand(Instruction *Inst,
+                                              unsigned int OpNum,
+                                              Function &Func) {
+  Value *Length = Inst->getOperand(OpNum);
+  if (Length->getType() == I64) {
+    Value *Truncated = new TruncInst(Length, I32, "", Inst);
+    Value *Extended = new ZExtInst(Truncated, I64, "", Inst);
+    Inst->setOperand(OpNum, Extended);
+  }
+}
+
 bool SandboxMemoryAccesses::runOnFunction(Function &F) {
   Value *MemBase = NULL;
 
   for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
     for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I) {
       if (isa<LoadInst>(I)) {
-        sandboxOperand(I, 0, F, &MemBase);
+        sandboxPtrOperand(I, 0, F, &MemBase);
       } else if (isa<StoreInst>(I)) {
-        sandboxOperand(I, 1, F, &MemBase);
+        sandboxPtrOperand(I, 1, F, &MemBase);
       } else if (isa<MemCpyInst>(I) || isa<MemMoveInst>(I)) {
-        sandboxOperand(I, 0, F, &MemBase);
-        sandboxOperand(I, 1, F, &MemBase);
+        sandboxPtrOperand(I, 0, F, &MemBase);
+        sandboxPtrOperand(I, 1, F, &MemBase);
+        sandboxLenOperand(I, 2, F);
       } else if (isa<MemSetInst>(I)) {
-        sandboxOperand(I, 0, F, &MemBase);
+        sandboxPtrOperand(I, 0, F, &MemBase);
+        sandboxLenOperand(I, 2, F);
       }
     }
   }
+
   return true;
 }
 
