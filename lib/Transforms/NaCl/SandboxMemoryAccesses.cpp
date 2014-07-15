@@ -18,6 +18,8 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 
+#include <cassert>
+
 #define GLOBAL_MINSFI_MEMBASE "__sfi_memory_base"
 
 using namespace llvm;
@@ -31,12 +33,11 @@ namespace {
 
   class SandboxMemoryAccesses : public FunctionPass {
     Value *MemBaseVar;
-    Value *MemBase;
     Type *I32;
     Type *I64;
 
-    Value *sandboxPtr(Value *Ptr, Instruction *InsertPt);
-    void sandboxOperand(Instruction *Inst, unsigned int OpNum);
+    Value *sandboxOperand(Instruction *Inst, unsigned int OpNum, Function &Func,
+                          Value *MemBase);
 
   public:
     static char ID;
@@ -58,49 +59,69 @@ bool SandboxMemoryAccesses::doInitialization(Module &M) {
   return true;
 }
 
-Value *SandboxMemoryAccesses::sandboxPtr(Value *Ptr, Instruction *InsertPt) {
+Value *SandboxMemoryAccesses::sandboxOperand(Instruction *Inst,
+                                             unsigned int OpNum,
+                                             Function &Func,
+                                             Value *MemBase) {
   /*
    * Function must first acquire the sandbox memory region base from
    * the global variable. If this is the first sandboxed pointer, insert
    * the corresponding load instruction at the beginning of the function.
    */
   if (MemBase == NULL) {
-    Function *Func = InsertPt->getParent()->getParent();
     Instruction *MemBaseInst = new LoadInst(MemBaseVar, "mem_base");
-    Func->getEntryBlock().getInstList().push_front(MemBaseInst);
+    Func.getEntryBlock().getInstList().push_front(MemBaseInst);
     MemBase = MemBaseInst;
   }
 
-  /*
-   * The pointer used by the program is truncated to a 32-bit integer,
-   * then extended back to 64 bits and memory base of the sandbox added.
-   */
-  Value *Truncated = new PtrToIntInst(Ptr, I32, "", InsertPt);
-  Value *ZExt = new ZExtInst(Truncated, I64, "", InsertPt);
-  Value *Added = BinaryOperator::Create(BinaryOperator::Add, MemBase, ZExt,
-                                        "", InsertPt);
-  return new IntToPtrInst(Added, Ptr->getType(), "", InsertPt);
-}
+  Value *Ptr = Inst->getOperand(OpNum);
 
-void SandboxMemoryAccesses::sandboxOperand(Instruction *Inst,
-                                           unsigned int OpNum) {
-  Inst->setOperand(OpNum, sandboxPtr(Inst->getOperand(OpNum), Inst));
+  /*
+   * Truncate the pointer to a 32-bit integer.
+   * If the preceding code does 32-bit arithmetic already, such as the pattern
+   * produced by ExpandGetElementPtr, reuse the final value and save two casts.
+   */
+  Value *TruncatedPtr;
+  IntToPtrInst *Cast = dyn_cast<IntToPtrInst>(Ptr);
+  bool CastFromInt32 = Cast && Cast->getOperand(0)->getType()->isIntegerTy(32);
+  if (CastFromInt32)
+    TruncatedPtr = Cast->getOperand(0);
+  else
+    TruncatedPtr = new PtrToIntInst(Ptr, I32, "", Inst);
+
+  /* Extend the pointer value back to 64 bits and add the memory base. */
+  Value *ExtendedPtr = new ZExtInst(TruncatedPtr, I64, "", Inst);
+  Value *AddedBase = BinaryOperator::Create(BinaryOperator::Add, MemBase,
+                                        ExtendedPtr, "", Inst);
+  Value *SandboxedPtr = new IntToPtrInst(AddedBase, Ptr->getType(), "", Inst);
+
+  /* Replace the pointer in the sandboxed operand */
+  Inst->setOperand(OpNum, SandboxedPtr);
+
+  /*
+   * If the sandboxing replaced an original IntToPtr instruction and it is
+   * not used any more, remove it.
+   */
+  if (CastFromInt32 && Cast->getNumUses() == 0)
+    Cast->eraseFromParent();
+
+  return MemBase;
 }
 
 bool SandboxMemoryAccesses::runOnFunction(Function &F) {
-  MemBase = NULL;
+  Value *MemBase = NULL;
 
   for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
     for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I) {
       if (isa<LoadInst>(I))
-        sandboxOperand(I, 0);
+        MemBase = sandboxOperand(I, 0, F, MemBase);
       else if (isa<StoreInst>(I))
-        sandboxOperand(I, 1);
+        MemBase = sandboxOperand(I, 1, F, MemBase);
       else if (isa<MemCpyInst>(I) || isa<MemMoveInst>(I)) {
-        sandboxOperand(I, 0);
-        sandboxOperand(I, 1);
+        MemBase = sandboxOperand(I, 0, F, MemBase);
+        MemBase = sandboxOperand(I, 1, F, MemBase);
       } else if (isa<MemSetInst>(I))
-        sandboxOperand(I, 0);
+        MemBase = sandboxOperand(I, 0, F, MemBase);
     }
   }
   return true;
