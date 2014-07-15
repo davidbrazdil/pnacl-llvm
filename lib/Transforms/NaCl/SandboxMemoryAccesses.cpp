@@ -12,6 +12,10 @@
 // the 32-bit address subspace defined by base address stored in
 // a global variable initialized at runtime.
 //
+// It is meant to be the last pass of MinSFI. Because there is
+// no runtime verifier, it must be trusted to correctly sandbox all
+// dereferenced pointers.
+//
 // Currently only works on x86_64.
 //
 // Applied on instructions:
