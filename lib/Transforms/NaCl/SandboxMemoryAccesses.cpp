@@ -154,7 +154,7 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
             sandboxPtrOperand(IntrCall, 1, F, &MemBase);
             break;
           default:
-            report_fatal_error("Encountered an unknown intrinsic");
+            report_fatal_error("SandboxMemoryAccesses: Unknown intrinsic");
         }
       }
     }
