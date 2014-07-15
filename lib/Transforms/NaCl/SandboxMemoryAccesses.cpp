@@ -18,8 +18,6 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 
-#include <cassert>
-
 #define GLOBAL_MINSFI_MEMBASE "__sfi_memory_base"
 
 using namespace llvm;
