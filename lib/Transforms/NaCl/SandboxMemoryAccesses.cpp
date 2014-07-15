@@ -131,6 +131,6 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
 }
 
 char SandboxMemoryAccesses::ID = 0;
-INITIALIZE_PASS(SandboxMemoryAccesses, "sandbox-memory-accesses",
+INITIALIZE_PASS(SandboxMemoryAccesses, "minsfi-sandbox-memory-accesses",
                 "Add SFI sandboxing to memory accesses",
                 false, false)
