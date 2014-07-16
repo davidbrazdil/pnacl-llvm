@@ -26,8 +26,19 @@
 //  - @llvm.nacl.atomic.rmw.*
 //  - @llvm.nacl.atomic.cmpxchg.*
 //
+// Not applied to:
+//  - inttoptr, ptrtoint
+//  - ret
+//
+// Fails if code contains an instruction with pointer-type operands
+// not listed above.
+//
 // Recognizes pointer arithmetic produced by ExpandGetElementPtr and
-// reuses its final integer value to save target instructions.
+// reuses its final integer value to save target instructions. Only safe
+// if runtime creates a 4GB guard page after the dedicated memory region.
+//
+// Does not sandbox pointers to functions invoked with Call. Assumes
+// CFI will be applied afterwards.
 //
 //===----------------------------------------------------------------------===//
 
