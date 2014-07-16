@@ -117,7 +117,8 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
               RedundantAdd = Op;
             }
 
-  // If the pattern above has not been recognized, truncate the pointer to I32.
+  // If the pattern above has not been recognized, start by truncating
+  // the pointer to i32.
   if (!TruncatedPtr)
     TruncatedPtr = new PtrToIntInst(Ptr, I32, "", Inst);
 
