@@ -324,10 +324,11 @@ define i1 @test_atomic_is_lock_free(i8* %ptr) {
 ; CHECK-NEXT:    ret i1 %val
 ; CHECK-NEXT:  }
 
+; -----------------------------------------------------------------------------
+; Test the special case which optimizes sandboxing of the output of
+; the ExpandGetElementPtr pass. 
 
-; TEST OPTIMIZATION OF ExpandGetElementPtr CODE
-
-; this will not get optimized because IntToPtr is not casting a result of an Add  
+; this won't get optimized because IntToPtr is not casting a result of an Add  
 define i32 @test_no_opt__cast_not_add(i32 %ptr_int) {
   %ptr = inttoptr i32 %ptr_int to i32*
   %val = load i32* %ptr
@@ -345,7 +346,7 @@ define i32 @test_no_opt__cast_not_add(i32 %ptr_int) {
 ; CHECK-NEXT:    ret i32 %val
 ; CHECK-NEXT:  }
 
-; this will not get optimized because the cast is not from i32 
+; this won't get optimized because the cast is not from i32 
 define i32 @test_no_opt__cast_not_32(i64 %ptr_int1, i64 %ptr_int2) {
   %ptr_sum = add i64 %ptr_int1, %ptr_int2  
   %ptr = inttoptr i64 %ptr_sum to i32*
@@ -365,7 +366,7 @@ define i32 @test_no_opt__cast_not_32(i64 %ptr_int1, i64 %ptr_int2) {
 ; CHECK-NEXT:    ret i32 %val
 ; CHECK-NEXT:  }
 
-; this will not get optimized because the Add's 2nd operand is not a constant  
+; this won't get optimized because the Add's 2nd operand is not a constant  
 define i32 @test_no_opt__add_not_constant(i32 %ptr_int1, i32 %ptr_int2) {
   %ptr_sum = add i32 %ptr_int1, %ptr_int2  
   %ptr = inttoptr i32 %ptr_sum to i32*
@@ -385,7 +386,7 @@ define i32 @test_no_opt__add_not_constant(i32 %ptr_int1, i32 %ptr_int2) {
 ; CHECK-NEXT:    ret i32 %val
 ; CHECK-NEXT:  }
 
-; this will not get optimized because the Add's 2nd operand is not positive
+; this won't get optimized because the Add's 2nd operand is not positive
 define i32 @test_no_opt__add_not_positive(i32 %ptr_int) {
   %ptr_sum = add i32 %ptr_int, -5  
   %ptr = inttoptr i32 %ptr_sum to i32*
