@@ -52,6 +52,7 @@ class SandboxMemoryAccesses : public FunctionPass {
   void sandboxPtrOperand(Instruction *Inst, unsigned int OpNum, Function &Func,
                          Value **MemBase);
   void sandboxLenOperand(Instruction *Inst, unsigned int OpNum, Function &Func);
+  void checkDoesNotHavePointerOperands(Instruction *Inst);
 
 public:
   static char ID;
@@ -151,6 +152,30 @@ void SandboxMemoryAccesses::sandboxLenOperand(Instruction *Inst,
   }
 }
 
+void SandboxMemoryAccesses::checkDoesNotHavePointerOperands(Instruction *Inst) {
+  bool hasPointerOperand = false;
+
+  if (CallInst *Call = dyn_cast<CallInst>(Inst)) {
+    int NumArguments = Call->getNumArgOperands();
+    for (int i = 0; i < NumArguments; ++i)
+      if (Call->getArgOperand(i)->getType()->isPointerTy()) {
+        hasPointerOperand = true;
+        break;
+      }
+  } else {
+    int NumOperands = Inst->getNumOperands();
+    for (int i = 0; i < NumOperands; ++i)
+      if (Inst->getOperand(i)->getType()->isPointerTy()) {
+        hasPointerOperand = true;
+        break;
+      }
+  }
+
+  if (hasPointerOperand)
+    report_fatal_error("SandboxMemoryAccesses: unexpected instruction with "
+                       "pointer-type operands");
+}
+
 bool SandboxMemoryAccesses::runOnFunction(Function &F) {
   Value *MemBase = NULL;
 
@@ -179,8 +204,11 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
           sandboxPtrOperand(IntrCall, 1, F, &MemBase);
           break;
         default:
-          break;
+          checkDoesNotHavePointerOperands(IntrCall);
         }
+      } else if (!isa<IntToPtrInst>(I) && !isa<PtrToIntInst>(I) &&
+                 !isa<ReturnInst>(I)) {
+        checkDoesNotHavePointerOperands(I);
       }
     }
   }
