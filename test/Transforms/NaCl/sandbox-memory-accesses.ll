@@ -1,6 +1,6 @@
 ; RUN: opt %s -expand-getelementptr -minsfi-sandbox-memory-accesses -S | FileCheck %s
 
-target datalayout = "e-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-p:32:32:32-v128:32:32"
+target datalayout = "p:32:32:32"
 target triple = "le32-unknown-nacl"
 
 ; CHECK:  @__sfi_memory_base = external global i64
