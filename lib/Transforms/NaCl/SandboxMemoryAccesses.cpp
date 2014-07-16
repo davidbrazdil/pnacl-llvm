@@ -157,7 +157,7 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
   // Replace the pointer in the sandboxed operand
   Inst->setOperand(OpNum, SandboxedPtr);
 
-  // Remove instructions if now dead
+  // Remove instructions if now dead (order matters)
   if (RedundantCast && RedundantCast->getNumUses() == 0)
     RedundantCast->eraseFromParent();
   if (RedundantAdd && RedundantAdd->getNumUses() == 0)
