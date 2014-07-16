@@ -139,18 +139,23 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
 
   // Sandbox the pointer by zero-extending it back to 64 bits, and adding
   // the memory region base.
-  Value *Extend = CopyDebug(new ZExtInst(Truncated, I64, "", Inst), Inst);
-  Instruction *WithBase =
-      CopyDebug(BinaryOperator::CreateAdd(*MemBase, Extend, "", Inst), Inst);
-  if (OffsetConst)
-    WithBase =
-        CopyDebug(BinaryOperator::CreateAdd(WithBase, OffsetConst, "", Inst),
-                  RedundantAdd);
-  Value *Sandboxed =
-      CopyDebug(new IntToPtrInst(WithBase, Ptr->getType(), "", Inst), Inst);
+  Instruction *Extend = new ZExtInst(Truncated, I64, "", Inst);
+  Instruction *AddBase = BinaryOperator::CreateAdd(*MemBase, Extend, "", Inst);
+  Instruction *AddOffset =
+      OffsetConst ? BinaryOperator::CreateAdd(AddBase, OffsetConst, "", Inst)
+                  : AddBase;
+  Instruction *SandboxedPtr = new IntToPtrInst(AddOffset, Ptr->getType(), "",
+                                               Inst);
+
+  // Copy debug information
+  CopyDebug(Extend, Inst);
+  CopyDebug(AddBase, Inst);
+  if (OffsetConst && RedundantAdd)
+    CopyDebug(AddOffset, RedundantAdd);
+  CopyDebug(SandboxedPtr, Inst);
 
   // Replace the pointer in the sandboxed operand
-  Inst->setOperand(OpNum, Sandboxed);
+  Inst->setOperand(OpNum, SandboxedPtr);
 
   // Remove instructions if now dead
   if (RedundantCast && RedundantCast->getNumUses() == 0)
