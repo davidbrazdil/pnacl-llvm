@@ -38,6 +38,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/NaClAtomicIntrinsics.h"
 
+#include "llvm/Support/raw_ostream.h"
+
 static const std::string GlobalMemBaseVariableName = "__sfi_memory_base";
 
 using namespace llvm;
@@ -70,7 +72,6 @@ bool SandboxMemoryAccesses::doInitialization(Module &M) {
   I64 = Type::getInt64Ty(M.getContext());
 
   MemBaseVar = M.getOrInsertGlobal(GlobalMemBaseVariableName, I64);
-
   return true;
 }
 
