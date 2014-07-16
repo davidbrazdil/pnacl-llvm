@@ -27,7 +27,7 @@
 //  - @llvm.nacl.atomic.cmpxchg.*
 //
 // Recognizes pointer arithmetic produced by ExpandGetElementPtr and
-// reuses its final integer value to save two casts.
+// reuses its final integer value to save target instructions.
 //
 //===----------------------------------------------------------------------===//
 
