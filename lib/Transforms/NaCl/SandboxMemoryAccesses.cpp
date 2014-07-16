@@ -62,7 +62,6 @@ public:
   virtual bool doInitialization(Module &M);
   virtual bool runOnFunction(Function &F);
 };
-
 }
 
 bool SandboxMemoryAccesses::doInitialization(Module &M) {
@@ -75,8 +74,7 @@ bool SandboxMemoryAccesses::doInitialization(Module &M) {
 
 void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
                                               unsigned int OpNum,
-                                              Function &Func,
-                                              Value **MemBase) {
+                                              Function &Func, Value **MemBase) {
 
   // Function must first acquire the sandbox memory region base from
   // the global variable. If this is the first sandboxed pointer, insert
@@ -144,17 +142,17 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
         sandboxLenOperand(I, 2, F);
       } else if (IntrinsicInst *IntrCall = dyn_cast<IntrinsicInst>(I)) {
         switch (IntrCall->getIntrinsicID()) {
-          case Intrinsic::nacl_atomic_load:
-          case Intrinsic::nacl_atomic_cmpxchg:
-            sandboxPtrOperand(IntrCall, 0, F, &MemBase);
-            break;
-          case Intrinsic::nacl_atomic_store:
-          case Intrinsic::nacl_atomic_rmw:
-          case Intrinsic::nacl_atomic_is_lock_free:
-            sandboxPtrOperand(IntrCall, 1, F, &MemBase);
-            break;
-          default:
-            break;
+        case Intrinsic::nacl_atomic_load:
+        case Intrinsic::nacl_atomic_cmpxchg:
+          sandboxPtrOperand(IntrCall, 0, F, &MemBase);
+          break;
+        case Intrinsic::nacl_atomic_store:
+        case Intrinsic::nacl_atomic_rmw:
+        case Intrinsic::nacl_atomic_is_lock_free:
+          sandboxPtrOperand(IntrCall, 1, F, &MemBase);
+          break;
+        default:
+          break;
         }
       }
     }
@@ -165,5 +163,4 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
 
 char SandboxMemoryAccesses::ID = 0;
 INITIALIZE_PASS(SandboxMemoryAccesses, "minsfi-sandbox-memory-accesses",
-                "Add SFI sandboxing to memory accesses",
-                false, false)
+                "Add SFI sandboxing to memory accesses", false, false)
