@@ -108,7 +108,7 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
   // case below.
   //
   // The recognized pattern is:
-  //   %0 = add i32 %x i32 <const>
+  //   %0 = add i32 %x i32 <const>            ; must be positive
   //   %ptr = inttoptr i32 %0 to <type>*
   // and can be replaced with:
   //   %0 = zext i32 %x to i64
