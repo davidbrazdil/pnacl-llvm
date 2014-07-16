@@ -169,25 +169,6 @@ define void @test_memset_64(i8* %dest, i64 %len) {
 ; CHECK-NEXT:    ret void
 ; CHECK-NEXT:  }
 
-%struct.foo = type { i32, i32 }
-
-define i32 @test_load_elementptr(%struct.foo* %foo) {
-  %y = getelementptr inbounds %struct.foo* %foo, i32 0, i32 1
-  %val = load i32* %y
-  ret i32 %val
-}
-
-; CHECK-LABEL: define i32 @test_load_elementptr(%struct.foo* %foo) {
-; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
-; CHECK-NEXT:    %gep_int = ptrtoint %struct.foo* %foo to i32
-; CHECK-NEXT:    %gep = add i32 %gep_int, 4
-; CHECK-NEXT:    %1 = zext i32 %gep to i64
-; CHECK-NEXT:    %2 = add i64 %mem_base, %1
-; CHECK-NEXT:    %3 = inttoptr i64 %2 to i32*
-; CHECK-NEXT:    %val = load i32* %3
-; CHECK-NEXT:    ret i32 %val
-; CHECK-NEXT:  }
-
 define i32 @test_atomic_load_32(i32* %ptr) {
   %val = call i32 @llvm.nacl.atomic.load.i32(i32* %ptr, i32 1)
   ret i32 %val
@@ -341,4 +322,142 @@ define i1 @test_atomic_is_lock_free(i8* %ptr) {
 ; CHECK-NEXT:    %4 = inttoptr i64 %3 to i8*
 ; CHECK-NEXT:    %val = call i1 @llvm.nacl.atomic.is.lock.free(i32 4, i8* %4)
 ; CHECK-NEXT:    ret i1 %val
+; CHECK-NEXT:  }
+
+
+; TEST OPTIMIZATION OF ExpandGetElementPtr CODE
+
+; this will not get optimized because IntToPtr is not casting a result of an Add  
+define i32 @test_no_opt__cast_not_add(i32 %ptr_int) {
+  %ptr = inttoptr i32 %ptr_int to i32*
+  %val = load i32* %ptr
+  ret i32 %val
+}
+
+; CHECK-LABEL: define i32 @test_no_opt__cast_not_add(i32 %ptr_int) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %ptr = inttoptr i32 %ptr_int to i32*
+; CHECK-NEXT:    %1 = ptrtoint i32* %ptr to i32
+; CHECK-NEXT:    %2 = zext i32 %1 to i64
+; CHECK-NEXT:    %3 = add i64 %mem_base, %2
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*
+; CHECK-NEXT:    %val = load i32* %4
+; CHECK-NEXT:    ret i32 %val
+; CHECK-NEXT:  }
+
+; this will not get optimized because the cast is not from i32 
+define i32 @test_no_opt__cast_not_32(i64 %ptr_int1, i64 %ptr_int2) {
+  %ptr_sum = add i64 %ptr_int1, %ptr_int2  
+  %ptr = inttoptr i64 %ptr_sum to i32*
+  %val = load i32* %ptr
+  ret i32 %val
+}
+
+; CHECK-LABEL: define i32 @test_no_opt__cast_not_32(i64 %ptr_int1, i64 %ptr_int2) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %ptr_sum = add i64 %ptr_int1, %ptr_int2  
+; CHECK-NEXT:    %ptr = inttoptr i64 %ptr_sum to i32*
+; CHECK-NEXT:    %1 = ptrtoint i32* %ptr to i32
+; CHECK-NEXT:    %2 = zext i32 %1 to i64
+; CHECK-NEXT:    %3 = add i64 %mem_base, %2
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*
+; CHECK-NEXT:    %val = load i32* %4
+; CHECK-NEXT:    ret i32 %val
+; CHECK-NEXT:  }
+
+; this will not get optimized because the Add's 2nd operand is not a constant  
+define i32 @test_no_opt__add_not_constant(i32 %ptr_int1, i32 %ptr_int2) {
+  %ptr_sum = add i32 %ptr_int1, %ptr_int2  
+  %ptr = inttoptr i32 %ptr_sum to i32*
+  %val = load i32* %ptr
+  ret i32 %val
+}
+
+; CHECK-LABEL: define i32 @test_no_opt__add_not_constant(i32 %ptr_int1, i32 %ptr_int2) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %ptr_sum = add i32 %ptr_int1, %ptr_int2  
+; CHECK-NEXT:    %ptr = inttoptr i32 %ptr_sum to i32*
+; CHECK-NEXT:    %1 = ptrtoint i32* %ptr to i32
+; CHECK-NEXT:    %2 = zext i32 %1 to i64
+; CHECK-NEXT:    %3 = add i64 %mem_base, %2
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*
+; CHECK-NEXT:    %val = load i32* %4
+; CHECK-NEXT:    ret i32 %val
+; CHECK-NEXT:  }
+
+; this will not get optimized because the Add's 2nd operand is not positive
+define i32 @test_no_opt__add_not_positive(i32 %ptr_int) {
+  %ptr_sum = add i32 %ptr_int, -5  
+  %ptr = inttoptr i32 %ptr_sum to i32*
+  %val = load i32* %ptr
+  ret i32 %val
+}
+
+; CHECK-LABEL: define i32 @test_no_opt__add_not_positive(i32 %ptr_int) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %ptr_sum = add i32 %ptr_int, -5  
+; CHECK-NEXT:    %ptr = inttoptr i32 %ptr_sum to i32*
+; CHECK-NEXT:    %1 = ptrtoint i32* %ptr to i32
+; CHECK-NEXT:    %2 = zext i32 %1 to i64
+; CHECK-NEXT:    %3 = add i64 %mem_base, %2
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*
+; CHECK-NEXT:    %val = load i32* %4
+; CHECK-NEXT:    ret i32 %val
+; CHECK-NEXT:  }
+
+%struct.foo = type { i32, i32 }
+
+; this should follow the pattern and hence get optimized
+define i32 @test_load_elementptr(%struct.foo* %foo) {
+  %y = getelementptr inbounds %struct.foo* %foo, i32 0, i32 1
+  %val = load i32* %y
+  ret i32 %val
+}
+
+; CHECK-LABEL: define i32 @test_load_elementptr(%struct.foo* %foo) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %gep_int = ptrtoint %struct.foo* %foo to i32
+; CHECK-NEXT:    %1 = zext i32 %gep_int to i64
+; CHECK-NEXT:    %2 = add i64 %mem_base, %1
+; CHECK-NEXT:    %3 = add i64 %2, 4
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*
+; CHECK-NEXT:    %val = load i32* %4
+; CHECK-NEXT:    ret i32 %val
+; CHECK-NEXT:  }
+
+define i32* @test_opt_dont_remove_cast_if_used(i32 %ptr_int, i32 %replace) {
+  %ptr_sum = add i32 %ptr_int, 5  
+  %ptr = inttoptr i32 %ptr_sum to i32*
+  store i32 %replace, i32* %ptr
+  ret i32* %ptr
+}
+
+; CHECK-LABEL: define i32* @test_opt_dont_remove_cast_if_used(i32 %ptr_int, i32 %replace) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %ptr_sum = add i32 %ptr_int, 5  
+; CHECK-NEXT:    %ptr = inttoptr i32 %ptr_sum to i32*
+; CHECK-NEXT:    %1 = zext i32 %ptr_int to i64
+; CHECK-NEXT:    %2 = add i64 %mem_base, %1
+; CHECK-NEXT:    %3 = add i64 %2, 5
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*
+; CHECK-NEXT:    store i32 %replace, i32* %4
+; CHECK-NEXT:    ret i32* %ptr
+; CHECK-NEXT:  }
+
+define i32 @test_opt_dont_remove_add_if_used(i32 %ptr_int, i32 %replace) {
+  %ptr_sum = add i32 %ptr_int, 5  
+  %ptr = inttoptr i32 %ptr_sum to i32*
+  store i32 %replace, i32* %ptr
+  ret i32 %ptr_sum
+}
+
+; CHECK-LABEL: define i32 @test_opt_dont_remove_add_if_used(i32 %ptr_int, i32 %replace) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %ptr_sum = add i32 %ptr_int, 5  
+; CHECK-NEXT:    %1 = zext i32 %ptr_int to i64
+; CHECK-NEXT:    %2 = add i64 %mem_base, %1
+; CHECK-NEXT:    %3 = add i64 %2, 5
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*
+; CHECK-NEXT:    store i32 %replace, i32* %4
+; CHECK-NEXT:    ret i32 %ptr_sum
 ; CHECK-NEXT:  }

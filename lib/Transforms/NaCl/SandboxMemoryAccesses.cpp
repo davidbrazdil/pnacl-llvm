@@ -86,31 +86,57 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
   }
 
   Value *Ptr = Inst->getOperand(OpNum);
+  Value *TruncatedPtr = NULL, *AddendConst = NULL;
 
-  // Truncate the pointer to a 32-bit integer.
-  // If the preceding code does 32-bit arithmetic already, such as the pattern
-  // produced by ExpandGetElementPtr, reuse the final value and save two casts.
-  Value *TruncatedPtr;
-  IntToPtrInst *Cast = dyn_cast<IntToPtrInst>(Ptr);
-  bool CastFromInt32 = Cast && Cast->getOperand(0)->getType()->isIntegerTy(32);
-  if (CastFromInt32)
-    TruncatedPtr = Cast->getOperand(0);
-  else
+  // The ExpandGetElementPtr pass replaces the getelementptr instruction
+  // with pointer arithmetic. If the produced pattern is recognized,
+  // the pointer can be sandboxed more efficiently than in the general
+  // case below.
+  //
+  // The recognized pattern is:
+  //   %0 = add i32 %x i32 <const>
+  //   %ptr = inttoptr i32 %0 to <type>*
+  // and can be replaced with:
+  //   %0 = zext i32 %x to i64
+  //   %1 = add i64 %0 i64 %mem_base
+  //   %2 = add i64 %1 i64 <const>            ; the constant is zero-extended
+  //   %ptr = inttoptr i64 %2 to <type>*
+  // Since this enables the code to access memory outside the dedicated
+  // region, this is safe only if the region is followed by a 4GB guard page.
+
+  Instruction *RedundantCast = NULL, *RedundantAdd = NULL;
+  if (IntToPtrInst *Cast = dyn_cast<IntToPtrInst>(Ptr))
+    if (BinaryOperator *Op = dyn_cast<BinaryOperator>(Cast->getOperand(0)))
+      if (Op->getOpcode() == Instruction::Add)
+        if (Op->getType()->isIntegerTy(32))
+          if (ConstantInt *CI = dyn_cast<ConstantInt>(Op->getOperand(1)))
+            if (CI->getSExtValue() > 0) {
+              TruncatedPtr = Op->getOperand(0);
+              AddendConst = ConstantInt::get(I64, CI->getZExtValue());
+              RedundantCast = Cast;
+              RedundantAdd = Op;
+            }
+
+  // If the pattern above has not been recognized, truncate the pointer to I32.
+  if (!TruncatedPtr)
     TruncatedPtr = new PtrToIntInst(Ptr, I32, "", Inst);
 
-  // Extend the pointer value back to 64 bits and add the memory base.
+  // Sandbox the pointer by extending it back to 64 bits, and adding
+  // the memory region base.
   Value *ExtendedPtr = new ZExtInst(TruncatedPtr, I64, "", Inst);
-  Value *AddedBase = BinaryOperator::Create(BinaryOperator::Add, *MemBase,
-                                            ExtendedPtr, "", Inst);
-  Value *SandboxedPtr = new IntToPtrInst(AddedBase, Ptr->getType(), "", Inst);
+  Value *AddedPtr = BinaryOperator::CreateAdd(*MemBase, ExtendedPtr, "", Inst);
+  if (AddendConst)
+    AddedPtr = BinaryOperator::CreateAdd(AddedPtr, AddendConst, "", Inst);
+  Value *SandboxedPtr = new IntToPtrInst(AddedPtr, Ptr->getType(), "", Inst);
 
   // Replace the pointer in the sandboxed operand
   Inst->setOperand(OpNum, SandboxedPtr);
 
-  // If the sandboxing replaced an original IntToPtr instruction and it is
-  // not used any more, remove it.
-  if (CastFromInt32 && Cast->getNumUses() == 0)
-    Cast->eraseFromParent();
+  // Remove instructions if now dead
+  if (RedundantCast && RedundantCast->getNumUses() == 0)
+    RedundantCast->eraseFromParent();
+  if (RedundantAdd && RedundantAdd->getNumUses() == 0)
+    RedundantAdd->eraseFromParent();
 }
 
 void SandboxMemoryAccesses::sandboxLenOperand(Instruction *Inst,
