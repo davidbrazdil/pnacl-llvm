@@ -90,7 +90,6 @@ bool SandboxMemoryAccesses::doInitialization(Module &M) {
 void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
                                               unsigned int OpNum,
                                               Function &Func, Value **MemBase) {
-
   // Function must first acquire the sandbox memory region base from
   // the global variable. If this is the first sandboxed pointer, insert
   // the corresponding load instruction at the beginning of the function.
