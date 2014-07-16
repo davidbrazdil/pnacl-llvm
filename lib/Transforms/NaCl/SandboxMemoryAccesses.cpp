@@ -18,7 +18,7 @@
 //
 // Currently only works on x86_64.
 //
-// Applied on instructions:
+// Sandboxed instructions:
 //  - load, store
 //  - memcpy, memmove, memset
 //  - @llvm.nacl.atomic.load.*
