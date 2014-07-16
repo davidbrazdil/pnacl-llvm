@@ -120,6 +120,7 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
   // region, this is safe only if the region is followed by a 4GB guard page.
 
   Instruction *RedundantCast = NULL, *RedundantAdd = NULL;
+  bool OptimizeGEP = false;
   if (IntToPtrInst *Cast = dyn_cast<IntToPtrInst>(Ptr))
     if (BinaryOperator *Op = dyn_cast<BinaryOperator>(Cast->getOperand(0)))
       if (Op->getOpcode() == Instruction::Add)
@@ -130,29 +131,28 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
               OffsetConst = ConstantInt::get(I64, CI->getZExtValue());
               RedundantCast = Cast;
               RedundantAdd = Op;
+              OptimizeGEP = true;
             }
 
   // If the pattern above has not been recognized, start by truncating
   // the pointer to i32.
-  if (!Truncated)
+  if (!OptimizeGEP)
     Truncated = CopyDebug(new PtrToIntInst(Ptr, I32, "", Inst), Inst);
 
   // Sandbox the pointer by zero-extending it back to 64 bits, and adding
   // the memory region base.
-  Instruction *Extend = new ZExtInst(Truncated, I64, "", Inst);
-  Instruction *AddBase = BinaryOperator::CreateAdd(*MemBase, Extend, "", Inst);
+  Instruction *Extend = CopyDebug(new ZExtInst(Truncated, I64, "", Inst), Inst);
+  Instruction *AddBase =
+      CopyDebug(BinaryOperator::CreateAdd(*MemBase, Extend, "", Inst), Inst);
   Instruction *AddOffset =
-      OffsetConst ? BinaryOperator::CreateAdd(AddBase, OffsetConst, "", Inst)
+      OptimizeGEP ? CopyDebug(BinaryOperator::CreateAdd(AddBase, OffsetConst,
+                                                        "", Inst),
+                              RedundantAdd)
                   : AddBase;
-  Instruction *SandboxedPtr = new IntToPtrInst(AddOffset, Ptr->getType(), "",
-                                               Inst);
-
-  // Copy debug information
-  CopyDebug(Extend, Inst);
-  CopyDebug(AddBase, Inst);
-  if (OffsetConst && RedundantAdd)
-    CopyDebug(AddOffset, RedundantAdd);
-  CopyDebug(SandboxedPtr, Inst);
+  Instruction *SandboxedPtr = CopyDebug(new IntToPtrInst(AddOffset,
+                                                         Ptr->getType(),
+                                                         "", Inst),
+                                        Inst);
 
   // Replace the pointer in the sandboxed operand
   Inst->setOperand(OpNum, SandboxedPtr);
