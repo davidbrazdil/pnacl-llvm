@@ -23,6 +23,10 @@ declare void @llvm.nacl.atomic.store.i64(i64, i64*, i32)
 declare i64 @llvm.nacl.atomic.rmw.i64(i32, i64*, i64, i32)
 declare i64 @llvm.nacl.atomic.cmpxchg.i64(i64*, i64, i64, i32, i32)
 
+declare void @llvm.nacl.atomic.fence(i32)
+declare void @llvm.nacl.atomic.fence.all()
+declare i1 @llvm.nacl.atomic.is.lock.free(i32, i8*)
+
 define i32 @test_load(i32* %ptr) {
   %val = load i32* %ptr
   ret i32 %val
@@ -302,4 +306,39 @@ define i64 @test_atomic_cmpxchg_64(i64* %ptr) {
 ; CHECK-NEXT:    %4 = inttoptr i64 %3 to i64*
 ; CHECK-NEXT:    %val = call i64 @llvm.nacl.atomic.cmpxchg.i64(i64* %4, i64 0, i64 1, i32 1, i32 1)
 ; CHECK-NEXT:    ret i64 %val
+; CHECK-NEXT:  }
+
+define void @test_atomic_fence() {
+  call void @llvm.nacl.atomic.fence(i32 1)
+  ret void
+}
+
+; CHECK-LABEL: define void @test_atomic_fence() {
+; CHECK-NEXT:    call void @llvm.nacl.atomic.fence(i32 1)
+; CHECK-NEXT:    ret void
+; CHECK-NEXT:  }
+
+define void @test_atomic_fence_all() {
+  call void @llvm.nacl.atomic.fence.all()
+  ret void
+}
+
+; CHECK-LABEL: define void @test_atomic_fence_all() {
+; CHECK-NEXT:    call void @llvm.nacl.atomic.fence.all()
+; CHECK-NEXT:    ret void
+; CHECK-NEXT:  }
+
+define i1 @test_atomic_is_lock_free(i8* %ptr) {
+  %val = call i1 @llvm.nacl.atomic.is.lock.free(i32 4, i8* %ptr)
+  ret i1 %val
+}
+
+; CHECK-LABEL: define i1 @test_atomic_is_lock_free(i8* %ptr) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %1 = ptrtoint i8* %ptr to i32
+; CHECK-NEXT:    %2 = zext i32 %1 to i64
+; CHECK-NEXT:    %3 = add i64 %mem_base, %2
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i8*
+; CHECK-NEXT:    %val = call i1 @llvm.nacl.atomic.is.lock.free(i32 4, i8* %4)
+; CHECK-NEXT:    ret i1 %val
 ; CHECK-NEXT:  }

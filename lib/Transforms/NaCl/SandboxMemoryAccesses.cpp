@@ -150,10 +150,11 @@ bool SandboxMemoryAccesses::runOnFunction(Function &F) {
             break;
           case Intrinsic::nacl_atomic_store:
           case Intrinsic::nacl_atomic_rmw:
+          case Intrinsic::nacl_atomic_is_lock_free:
             sandboxPtrOperand(IntrCall, 1, F, &MemBase);
             break;
           default:
-            report_fatal_error("SandboxMemoryAccesses: Unknown intrinsic");
+            break;
         }
       }
     }
