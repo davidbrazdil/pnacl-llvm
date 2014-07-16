@@ -27,6 +27,17 @@ declare void @llvm.nacl.atomic.fence(i32)
 declare void @llvm.nacl.atomic.fence.all()
 declare i1 @llvm.nacl.atomic.is.lock.free(i32, i8*)
 
+define i32 @test_no_sandbox(i32 %x, i32 %y) {
+  %sum = add i32 %x, %y
+  ret i32 %sum
+}
+
+; CHECK-LABEL: define i32 @test_no_sandbox(i32 %x, i32 %y) {
+; CHECK-NOT:     @__sfi_memory_base
+; CHECK:         %sum = add i32 %x, %y
+; CHECK-NEXT:    ret i32 %sum
+; CHECK-NEXT:  }
+
 define i32 @test_load(i32* %ptr) {
   %val = load i32* %ptr
   ret i32 %val
