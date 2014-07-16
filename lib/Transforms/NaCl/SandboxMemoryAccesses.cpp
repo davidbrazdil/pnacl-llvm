@@ -38,8 +38,6 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/NaClAtomicIntrinsics.h"
 
-#include "llvm/Support/raw_ostream.h"
-
 static const std::string GlobalMemBaseVariableName = "__sfi_memory_base";
 
 using namespace llvm;
