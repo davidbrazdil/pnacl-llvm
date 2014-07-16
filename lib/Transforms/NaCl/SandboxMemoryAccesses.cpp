@@ -48,6 +48,7 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/NaClAtomicIntrinsics.h"
+#include "llvm/Transforms/NaCl.h"
 
 static const std::string GlobalMemBaseVariableName = "__sfi_memory_base";
 
@@ -100,7 +101,7 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
   }
 
   Value *Ptr = Inst->getOperand(OpNum);
-  Value *TruncatedPtr = NULL, *AddendConst = NULL;
+  Value *Truncated = NULL, *OffsetConst = NULL;
 
   // The ExpandGetElementPtr pass replaces the getelementptr instruction
   // with pointer arithmetic. If the produced pattern is recognized,
@@ -125,27 +126,31 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
         if (Op->getType()->isIntegerTy(32))
           if (ConstantInt *CI = dyn_cast<ConstantInt>(Op->getOperand(1)))
             if (CI->getSExtValue() > 0) {
-              TruncatedPtr = Op->getOperand(0);
-              AddendConst = ConstantInt::get(I64, CI->getZExtValue());
+              Truncated = Op->getOperand(0);
+              OffsetConst = ConstantInt::get(I64, CI->getZExtValue());
               RedundantCast = Cast;
               RedundantAdd = Op;
             }
 
   // If the pattern above has not been recognized, start by truncating
   // the pointer to i32.
-  if (!TruncatedPtr)
-    TruncatedPtr = new PtrToIntInst(Ptr, I32, "", Inst);
+  if (!Truncated)
+    Truncated = CopyDebug(new PtrToIntInst(Ptr, I32, "", Inst), Inst);
 
-  // Sandbox the pointer by extending it back to 64 bits, and adding
+  // Sandbox the pointer by zero-extending it back to 64 bits, and adding
   // the memory region base.
-  Value *ExtendedPtr = new ZExtInst(TruncatedPtr, I64, "", Inst);
-  Value *AddedPtr = BinaryOperator::CreateAdd(*MemBase, ExtendedPtr, "", Inst);
-  if (AddendConst)
-    AddedPtr = BinaryOperator::CreateAdd(AddedPtr, AddendConst, "", Inst);
-  Value *SandboxedPtr = new IntToPtrInst(AddedPtr, Ptr->getType(), "", Inst);
+  Value *Extend = CopyDebug(new ZExtInst(Truncated, I64, "", Inst), Inst);
+  Instruction *WithBase =
+      CopyDebug(BinaryOperator::CreateAdd(*MemBase, Extend, "", Inst), Inst);
+  if (OffsetConst)
+    WithBase =
+        CopyDebug(BinaryOperator::CreateAdd(WithBase, OffsetConst, "", Inst),
+                  RedundantAdd);
+  Value *Sandboxed =
+      CopyDebug(new IntToPtrInst(WithBase, Ptr->getType(), "", Inst), Inst);
 
   // Replace the pointer in the sandboxed operand
-  Inst->setOperand(OpNum, SandboxedPtr);
+  Inst->setOperand(OpNum, Sandboxed);
 
   // Remove instructions if now dead
   if (RedundantCast && RedundantCast->getNumUses() == 0)

@@ -473,3 +473,44 @@ define i32 @test_opt_dont_remove_add_if_used(i32 %ptr_int, i32 %replace) {
 ; CHECK-NEXT:    store i32 %replace, i32* %4
 ; CHECK-NEXT:    ret i32 %ptr_sum
 ; CHECK-NEXT:  }
+
+
+; ------------------------------------------------------------------------------
+; Check that dbg symbols are preserved
+
+define i32 @test_load_dbg(i32* %ptr) {
+  %val = load i32* %ptr, !dbg !0
+  ret i32 %val, !dbg !1
+}
+
+; CHECK-LABEL: define i32 @test_load_dbg(i32* %ptr) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %1 = ptrtoint i32* %ptr to i32, !dbg !0
+; CHECK-NEXT:    %2 = zext i32 %1 to i64, !dbg !0
+; CHECK-NEXT:    %3 = add i64 %mem_base, %2, !dbg !0
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*, !dbg !0 
+; CHECK-NEXT:    %val = load i32* %4, !dbg !0
+; CHECK-NEXT:    ret i32 %val, !dbg !1
+; CHECK-NEXT:  }
+
+define void @test_opt_dbg(i32 %ptr_int, i32 %replace) {
+  %ptr_sum = add i32 %ptr_int, 5, !dbg !0
+  %ptr = inttoptr i32 %ptr_sum to i32*, !dbg !1
+  store i32 %replace, i32* %ptr, !dbg !2
+  ret void, !dbg !3
+}
+
+; CHECK-LABEL: define void @test_opt_dbg(i32 %ptr_int, i32 %replace) {
+; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
+; CHECK-NEXT:    %1 = zext i32 %ptr_int to i64, !dbg !2
+; CHECK-NEXT:    %2 = add i64 %mem_base, %1, !dbg !2
+; CHECK-NEXT:    %3 = add i64 %2, 5, !dbg !0
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*, !dbg !2 
+; CHECK-NEXT:    store i32 %replace, i32* %4, !dbg !2
+; CHECK-NEXT:    ret void, !dbg !3
+; CHECK-NEXT:  }
+
+!0 = metadata !{i32 138, i32 0, metadata !0, null}
+!1 = metadata !{i32 142, i32 0, metadata !1, null}
+!2 = metadata !{i32 144, i32 0, metadata !2, null}
+!3 = metadata !{i32 144, i32 0, metadata !3, null}
