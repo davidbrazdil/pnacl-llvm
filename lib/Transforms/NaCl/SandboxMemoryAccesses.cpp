@@ -38,6 +38,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/NaClAtomicIntrinsics.h"
 
+#include "llvm/Support/raw_ostream.h"
+
 static const std::string GlobalMemBaseVariableName = "__sfi_memory_base";
 
 using namespace llvm;
@@ -155,20 +157,17 @@ void SandboxMemoryAccesses::sandboxLenOperand(Instruction *Inst,
 void SandboxMemoryAccesses::checkDoesNotHavePointerOperands(Instruction *Inst) {
   bool hasPointerOperand = false;
 
+  // Handle Call instructions separately because they always contain
+  // a pointer to the target function. Its integrity is guaranteed by CFI.
+  // This pass therefore only checks the function's arguments.
   if (CallInst *Call = dyn_cast<CallInst>(Inst)) {
     int NumArguments = Call->getNumArgOperands();
     for (int i = 0; i < NumArguments; ++i)
-      if (Call->getArgOperand(i)->getType()->isPointerTy()) {
-        hasPointerOperand = true;
-        break;
-      }
+      hasPointerOperand |= Call->getArgOperand(i)->getType()->isPointerTy();
   } else {
     int NumOperands = Inst->getNumOperands();
     for (int i = 0; i < NumOperands; ++i)
-      if (Inst->getOperand(i)->getType()->isPointerTy()) {
-        hasPointerOperand = true;
-        break;
-      }
+      hasPointerOperand |= Inst->getOperand(i)->getType()->isPointerTy();
   }
 
   if (hasPointerOperand)
