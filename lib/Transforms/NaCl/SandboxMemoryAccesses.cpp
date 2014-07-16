@@ -69,6 +69,8 @@ public:
   static char ID;
   SandboxMemoryAccesses() : FunctionPass(ID) {
     initializeSandboxMemoryAccessesPass(*PassRegistry::getPassRegistry());
+    MemBaseVar = NULL;
+    I32 = I64 = NULL;
   }
 
   virtual bool doInitialization(Module &M);
