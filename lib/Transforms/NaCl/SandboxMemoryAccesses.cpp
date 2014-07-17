@@ -150,10 +150,8 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
                                                         "", Inst),
                               RedundantAdd)
                   : AddBase;
-  Instruction *SandboxedPtr = CopyDebug(new IntToPtrInst(AddOffset,
-                                                         Ptr->getType(),
-                                                         "", Inst),
-                                        Inst);
+  Instruction *SandboxedPtr =
+      CopyDebug(new IntToPtrInst(AddOffset, Ptr->getType(), "", Inst), Inst);
 
   // Replace the pointer in the sandboxed operand
   Inst->setOperand(OpNum, SandboxedPtr);
