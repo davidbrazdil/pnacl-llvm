@@ -83,7 +83,9 @@ bool SandboxMemoryAccesses::doInitialization(Module &M) {
   I32 = Type::getInt32Ty(M.getContext());
   I64 = Type::getInt64Ty(M.getContext());
 
+  assert(!M.getGlobalVariable(GlobalMemBaseVariableName));
   MemBaseVar = M.getOrInsertGlobal(GlobalMemBaseVariableName, I64);
+
   return true;
 }
 
@@ -168,8 +170,8 @@ void SandboxMemoryAccesses::sandboxLenOperand(Instruction *Inst,
                                               Function &Func) {
   Value *Length = Inst->getOperand(OpNum);
   if (Length->getType() == I64) {
-    Value *Truncated = new TruncInst(Length, I32, "", Inst);
-    Value *Extended = new ZExtInst(Truncated, I64, "", Inst);
+    Value *Truncated = CopyDebug(new TruncInst(Length, I32, "", Inst), Inst);
+    Value *Extended = CopyDebug(new ZExtInst(Truncated, I64, "", Inst), Inst);
     Inst->setOperand(OpNum, Extended);
   }
 }
