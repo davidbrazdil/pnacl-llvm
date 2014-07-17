@@ -120,8 +120,8 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
   // Since this enables the code to access memory outside the dedicated
   // region, this is safe only if the region is followed by a 4GB guard page.
 
-  Instruction *RedundantCast = NULL, *RedundantAdd = NULL;
   bool OptimizeGEP = false;
+  Instruction *RedundantCast = NULL, *RedundantAdd = NULL;
   if (IntToPtrInst *Cast = dyn_cast<IntToPtrInst>(Ptr))
     if (BinaryOperator *Op = dyn_cast<BinaryOperator>(Cast->getOperand(0)))
       if (Op->getOpcode() == Instruction::Add)
@@ -138,29 +138,32 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
   // If the pattern above has not been recognized, start by truncating
   // the pointer to i32.
   if (!OptimizeGEP)
-    Truncated = CopyDebug(new PtrToIntInst(Ptr, I32, "", Inst), Inst);
+    Truncated = new PtrToIntInst(Ptr, I32, "", Inst);
 
   // Sandbox the pointer by zero-extending it back to 64 bits, and adding
   // the memory region base.
-  Instruction *Extend = CopyDebug(new ZExtInst(Truncated, I64, "", Inst), Inst);
-  Instruction *AddBase =
-      CopyDebug(BinaryOperator::CreateAdd(*MemBase, Extend, "", Inst), Inst);
+  Instruction *Extend = new ZExtInst(Truncated, I64, "", Inst);
+  Instruction *AddBase = BinaryOperator::CreateAdd(*MemBase, Extend, "", Inst);
   Instruction *AddOffset =
-      OptimizeGEP ? CopyDebug(BinaryOperator::CreateAdd(AddBase, OffsetConst,
-                                                        "", Inst),
-                              RedundantAdd)
+      OptimizeGEP ? BinaryOperator::CreateAdd(AddBase, OffsetConst, "", Inst)
                   : AddBase;
   Instruction *SandboxedPtr =
-      CopyDebug(new IntToPtrInst(AddOffset, Ptr->getType(), "", Inst), Inst);
+      new IntToPtrInst(AddOffset, Ptr->getType(), "", Inst);
 
   // Replace the pointer in the sandboxed operand
   Inst->setOperand(OpNum, SandboxedPtr);
 
-  // Remove instructions if now dead (order matters)
-  if (RedundantCast && RedundantCast->getNumUses() == 0)
-    RedundantCast->eraseFromParent();
-  if (RedundantAdd && RedundantAdd->getNumUses() == 0)
-    RedundantAdd->eraseFromParent();
+  if (OptimizeGEP) {
+    // Copy debug information
+    CopyDebug(AddOffset, RedundantAdd);
+    CopyDebug(SandboxedPtr, RedundantCast);
+
+    // Remove instructions if now dead (order matters)
+    if (RedundantCast->getNumUses() == 0)
+      RedundantCast->eraseFromParent();
+    if (RedundantAdd->getNumUses() == 0)
+      RedundantAdd->eraseFromParent();
+  }
 }
 
 void SandboxMemoryAccesses::sandboxLenOperand(Instruction *Inst,
@@ -168,8 +171,8 @@ void SandboxMemoryAccesses::sandboxLenOperand(Instruction *Inst,
                                               Function &Func) {
   Value *Length = Inst->getOperand(OpNum);
   if (Length->getType() == I64) {
-    Value *Truncated = CopyDebug(new TruncInst(Length, I32, "", Inst), Inst);
-    Value *Extended = CopyDebug(new ZExtInst(Truncated, I64, "", Inst), Inst);
+    Value *Truncated = new TruncInst(Length, I32, "", Inst);
+    Value *Extended = new ZExtInst(Truncated, I64, "", Inst);
     Inst->setOperand(OpNum, Extended);
   }
 }

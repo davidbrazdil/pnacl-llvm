@@ -478,19 +478,25 @@ define i32 @test_opt_dont_remove_add_if_used(i32 %ptr_int, i32 %replace) {
 ; ------------------------------------------------------------------------------
 ; Check that dbg symbols are preserved
 
-define i32 @test_load_dbg(i32* %ptr) {
-  %val = load i32* %ptr, !dbg !0
-  ret i32 %val, !dbg !1
+define void @test_len_dbg(i8* %dest, i8* %src, i64 %len) {
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %dest, i8* %src, i64 %len, i32 4, i1 false), !dbg !0
+  ret void
 }
 
-; CHECK-LABEL: define i32 @test_load_dbg(i32* %ptr) {
+; CHECK-LABEL: define void @test_len_dbg(i8* %dest, i8* %src, i64 %len) {
 ; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
-; CHECK-NEXT:    %1 = ptrtoint i32* %ptr to i32, !dbg !0
-; CHECK-NEXT:    %2 = zext i32 %1 to i64, !dbg !0
-; CHECK-NEXT:    %3 = add i64 %mem_base, %2, !dbg !0
-; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*, !dbg !0 
-; CHECK-NEXT:    %val = load i32* %4, !dbg !0
-; CHECK-NEXT:    ret i32 %val, !dbg !1
+; CHECK-NEXT:    %1 = ptrtoint i8* %dest to i32
+; CHECK-NEXT:    %2 = zext i32 %1 to i64
+; CHECK-NEXT:    %3 = add i64 %mem_base, %2
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i8*
+; CHECK-NEXT:    %5 = ptrtoint i8* %src to i32
+; CHECK-NEXT:    %6 = zext i32 %5 to i64
+; CHECK-NEXT:    %7 = add i64 %mem_base, %6
+; CHECK-NEXT:    %8 = inttoptr i64 %7 to i8*
+; CHECK-NEXT:    %9 = trunc i64 %len to i32
+; CHECK-NEXT:    %10 = zext i32 %9 to i64
+; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* %4, i8* %8, i64 %10, i32 4, i1 false), !dbg !0
+; CHECK-NEXT:    ret void
 ; CHECK-NEXT:  }
 
 define void @test_opt_dbg(i32 %ptr_int, i32 %replace) {
@@ -502,33 +508,12 @@ define void @test_opt_dbg(i32 %ptr_int, i32 %replace) {
 
 ; CHECK-LABEL: define void @test_opt_dbg(i32 %ptr_int, i32 %replace) {
 ; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
-; CHECK-NEXT:    %1 = zext i32 %ptr_int to i64, !dbg !2
-; CHECK-NEXT:    %2 = add i64 %mem_base, %1, !dbg !2
+; CHECK-NEXT:    %1 = zext i32 %ptr_int to i64
+; CHECK-NEXT:    %2 = add i64 %mem_base, %1
 ; CHECK-NEXT:    %3 = add i64 %2, 5, !dbg !0
-; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*, !dbg !2 
+; CHECK-NEXT:    %4 = inttoptr i64 %3 to i32*, !dbg !1
 ; CHECK-NEXT:    store i32 %replace, i32* %4, !dbg !2
 ; CHECK-NEXT:    ret void, !dbg !3
-; CHECK-NEXT:  }
-
-define void @test_len_dbg(i8* %dest, i8* %src, i64 %len) {
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %dest, i8* %src, i64 %len, i32 4, i1 false), !dbg !1
-  ret void
-}
-
-; CHECK-LABEL: define void @test_len_dbg(i8* %dest, i8* %src, i64 %len) {
-; CHECK-NEXT:    %mem_base = load i64* @__sfi_memory_base
-; CHECK-NEXT:    %1 = ptrtoint i8* %dest to i32, !dbg !1
-; CHECK-NEXT:    %2 = zext i32 %1 to i64, !dbg !1
-; CHECK-NEXT:    %3 = add i64 %mem_base, %2, !dbg !1
-; CHECK-NEXT:    %4 = inttoptr i64 %3 to i8*, !dbg !1
-; CHECK-NEXT:    %5 = ptrtoint i8* %src to i32, !dbg !1
-; CHECK-NEXT:    %6 = zext i32 %5 to i64, !dbg !1
-; CHECK-NEXT:    %7 = add i64 %mem_base, %6, !dbg !1
-; CHECK-NEXT:    %8 = inttoptr i64 %7 to i8*, !dbg !1
-; CHECK-NEXT:    %9 = trunc i64 %len to i32, !dbg !1
-; CHECK-NEXT:    %10 = zext i32 %9 to i64, !dbg !1
-; CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* %4, i8* %8, i64 %10, i32 4, i1 false), !dbg !1
-; CHECK-NEXT:    ret void
 ; CHECK-NEXT:  }
 
 !0 = metadata !{i32 138, i32 0, metadata !0, null}
