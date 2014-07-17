@@ -115,7 +115,7 @@ void SandboxMemoryAccesses::sandboxPtrOperand(Instruction *Inst,
   // and can be replaced with:
   //   %0 = zext i32 %x to i64
   //   %1 = add i64 %0 i64 %mem_base
-  //   %2 = add i64 %1 i64 <const>            ; the constant is zero-extended
+  //   %2 = add i64 %1 i64 <const>            ; zero-extended to i64
   //   %ptr = inttoptr i64 %2 to <type>*
   // Since this enables the code to access memory outside the dedicated
   // region, this is safe only if the region is followed by a 4GB guard page.
